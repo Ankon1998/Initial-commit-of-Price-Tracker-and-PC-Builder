@@ -89,8 +89,10 @@ if page == "Search Products":
                         if img: st.image(img, use_container_width=True)
                         if price:
                             st.metric("Price", f"{int(price)} Tk", delta="- Lowest" if is_best else None)
-                            if res.get("url") and res.get("url").startswith("http"):
-                                st.link_button("View Product", res["url"], key=f"lk_{name}_{i}")
+                            prod_url = res.get("url")
+                            if prod_url and prod_url.startswith("http"):
+                                # FIXED: Removed 'key' to avoid TypeError
+                                st.link_button("View Product", prod_url)
                         else: st.error("Out of Stock")
                 status.update(label="✅ Search Complete!", state="complete")
 
@@ -99,7 +101,7 @@ elif page == "PC Builder":
     st.title("🖥️ Smart Component Selection (Compatibility Mode)")
     st.write("Pick a Processor, and we'll filter motherboards based on specific Intel/AMD sockets.")
 
-    # 1. COMPATIBILITY MAPPING (Based on your provided images)
+    # 1. COMPATIBILITY MAPPING (Based on provided documentation)
     cpu_options = {
         "Intel Core Ultra 200 (15th Gen)": ("LGA1851", "Intel"),
         "Intel Core 14th/13th/12th Gen": ("LGA1700", "Intel"),
@@ -120,25 +122,20 @@ elif page == "PC Builder":
 
     # 2. SELECTION UI
     c1, c2 = st.columns(2)
-    
     with c1:
         st.subheader("Core Components")
         selected_cpu_fam = st.selectbox("Select CPU Family", list(cpu_options.keys()))
         socket = cpu_options[selected_cpu_fam][0]
-        
         st.info(f"Required Socket: **{socket}**")
         
-        # Filter Motherboards based on the detected socket
         compatible_mbs = mb_options.get(socket, ["Universal Motherboard"])
         selected_mb = st.selectbox("Select Compatible Motherboard", compatible_mbs)
         
-        # Optional specific model for query refining
         specific_cpu = st.text_input("Enter Specific CPU Model (Optional)", placeholder="e.g. Core i5-13400")
         final_cpu_query = specific_cpu if specific_cpu else selected_cpu_fam
 
     with c2:
         st.subheader("Supporting Parts")
-        # Logic for RAM type based on modern sockets
         ram_type = "DDR5" if socket in ["AM5", "LGA1851"] else "DDR4"
         selected_ram = st.selectbox(f"Memory ({ram_type})", [f"Corsair 16GB {ram_type}", f"G.Skill 8GB {ram_type}"])
         selected_ssd = st.selectbox("Storage", ["Samsung 500GB NVMe", "HP 250GB SSD", "Western Digital 1TB"])
@@ -150,14 +147,7 @@ elif page == "PC Builder":
         if not current_shops:
             st.error("Please add shops in Admin Dashboard first.")
         else:
-            build_items = {
-                "CPU": final_cpu_query,
-                "Motherboard": selected_mb,
-                "RAM": selected_ram,
-                "SSD": selected_ssd,
-                "PSU": selected_psu
-            }
-            
+            build_items = {"CPU": final_cpu_query, "Motherboard": selected_mb, "RAM": selected_ram, "SSD": selected_ssd, "PSU": selected_psu}
             build_results = []
             total_cost = 0
             
@@ -166,7 +156,6 @@ elif page == "PC Builder":
             with st.status("🛠️ Multi-threading price comparison...", expanded=True) as status:
                 for part_type, query in build_items.items():
                     status.write(f"Searching for best **{query}** deal...")
-                    
                     prices = []
                     with concurrent.futures.ThreadPoolExecutor() as executor:
                         futures = {executor.submit(search_and_get_price, query, n, c): n for n, c in current_shops.items()}
@@ -185,7 +174,7 @@ elif page == "PC Builder":
 
                 status.update(label="✅ Quotation Complete!", state="complete")
 
-            # Final Table and Download
+            # Final Table
             df_build = pd.DataFrame(build_results)
             st.table(df_build[["Category", "Model", "Shop", "Price"]])
             st.markdown(f"### 💰 Total Build Cost: **{int(total_cost)} Tk**")
@@ -249,4 +238,4 @@ elif page == "Admin Dashboard":
                         futs = {ex.submit(check_health, n, c): n for n, c in shops.items()}
                         for f in concurrent.futures.as_completed(futs): results[futs[f]] = f.result()
                     s.update(label="Diagnostic Finished", state="complete")
-                st.table([{"Store": k, "Status": v} for k, v in results.items()])
+                st.table([{"Store": k, "Status": v} for k, v in results.items()]) 
